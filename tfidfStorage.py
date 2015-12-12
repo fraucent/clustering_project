@@ -1,8 +1,10 @@
+#!/usr/bin/python3.2
 # coding=utf-8
 import codecs
 import math
 
 import struct
+from collections import Counter
 
 class TFIDF_reader(object):
     def __init__(self, filename):
@@ -171,8 +173,68 @@ def parse_bagofwords(filename):
         tfidfc.compute_vector_and_add(oldDoc, currentWords)
 
 
+def parse_tokens(docsfilename, idxfilename) :
+	idx_dct = {}
+	for line in codecs.open(idxfilename, 'r', 'utf-8') :
+		data = line.split()
+		idx_dct[data[0]] = int(data[1])
+	
+	currentwordcount = Counter()
+	tfidfc = TFIDF_computation()
+
+	for line in codecs.open(docsfilename, 'r', 'utf-8') :
+		data = line.split()
+		if len(data) == 0 :
+			continue
+		elif data[0] == '.I' :
+			if len(currentwordcount) != 0 :
+				docsize = 0
+				for word in currentwordcount :
+					if word in idx_dct :
+						docsize += 1
+						tfidfc.add_word_usage(idx_dct[word],currentwordcount[word])
+				tfidfc.add_doc_size(docsize)
+				currentwordcount = Counter()
+		elif data[0] == '.W' :
+			continue
+		else :
+			currentwordcount.update(data)
+	if len(currentwordcount) != 0 :
+		docsize = 0
+		for word in currentwordcount :
+			if word in idx_dct :
+				docsize += 1
+				tfidfc.add_word_usage(idx_dct[word],currentwordcount[word])
+		tfidfc.add_doc_size(docsize)
+	
+	tfidfc.init_storage("test.vectors", "")
+	oldDoc = -1
+	currentwordcount = Counter()
+	
+	for line in codecs.open(docsfilename, 'r', 'utf-8') :
+		data = line.split()
+		if len(data) == 0 :
+			continue
+		elif data[0] == '.I' :
+			if len(currentwordcount) != 0 :
+				currentwords = dict([(idx_dct[w],currentwordcount[w]) \
+					for w in currentwordcount if w in idx_dct])
+				tfidfc.compute_vector_and_add(oldDoc, currentwords)
+				currentwordcount = Counter()
+			oldDoc = int(data[1])
+		elif data[0] == '.W' :
+			continue
+		else :
+			currentwordcount.update(data)
+	if len(currentwordcount) != 0 :
+		currentwords = dict([(idx_dct[w],currentwordcount[w]) \
+			for w in currentwordcount if w in idx_dct])
+		tfidfc.compute_vector_and_add(oldDoc, currentwords)
+
+
 if __name__ == "__main__":
-    #parse_bagofwords("data/docword.nytimes.txt")
+    #parse_bagofwords("data/docword.nytimes1.txt")
+    parse_tokens('data/lyrl2004_tokens_test_sample.dat', 'data/stem.termid.idf.map.txt')
     reader = TFIDF_reader("test.vectors")
     vector1 = reader.read_idx(0)
     vector2 = reader.read_idx(1)
