@@ -11,18 +11,21 @@ class GRGPF(object):
     compute_distance = None
 
     def __init__(self, distance_measure, get_point_from_docid, limit_subnodes, limit_clusters_per_leaf, limit_total_clusters, limit_total_nodes, k,
-                 sample_size, initial_threshold, threshold_increment):
+                 sample_size, get_next_threshold):
         self.limit_subnodes = limit_subnodes
         self.limit_clusters_per_leaf = limit_clusters_per_leaf
         self.limit_total_clusters = limit_total_clusters
         self.limit_total_nodes = limit_total_nodes
         self.distance_measure = distance_measure
-        self.threshold = initial_threshold
-        self.threshold_increment = threshold_increment
+        self.threshold = get_next_threshold()
+        self.get_next_threshold = get_next_threshold
         self.sample_size = sample_size
         self.get_point_from_docid = get_point_from_docid
         self.k = k
         self.root = None
+
+    def recompute(self, only_samples):
+        self.root.recompute(only_samples)
 
     def add_point(self, p):
         if self.root is None:
@@ -34,8 +37,10 @@ class GRGPF(object):
             if retval == 2:
                 self.root = self.InteriorNode(self.root.split(), self.distance_measure, (lambda: self.limit_subnodes), self.sample_size)
 
-            if self.root.get_cluster_count() > self.limit_total_clusters or self.root.get_node_count() > self.limit_subnodes:
-                self.threshold += self.threshold_increment
+            if self.root.get_cluster_count() > self.limit_total_clusters or self.root.get_node_count() > self.limit_total_nodes:
+                self.threshold = self.get_next_threshold()
+                print("Start merge with new threshold " + str(self.threshold))
+                print("Before: "+str(self.root.get_cluster_count())+" "+str(self.root.get_node_count()))
 
                 clusters = self.root.get_clusters()
                 new_root = self.Leaf([clusters[0]], self.distance_measure, lambda: self.limit_clusters_per_leaf)
@@ -47,6 +52,8 @@ class GRGPF(object):
                     if retval is True:
                         new_root = self.InteriorNode(new_root.split(), self.distance_measure, (lambda: self.limit_subnodes), self.sample_size)
                 self.root = new_root
+
+                print("After: " + str(self.root.get_cluster_count()) + " " + str(self.root.get_node_count()))
 
     class Cluster(object):
         def __init__(self):
@@ -65,6 +72,7 @@ class GRGPF(object):
             self.point_storage = None
 
         def _verify_struct(self):
+            return
             assert len(self.points) == self.N
             assert self.clustroid is not None
             if self.N >= 2*self.k+1:
@@ -84,11 +92,11 @@ class GRGPF(object):
                 else:
                     return cls._init_merge_copy(cluster1, cluster2.point_storage)
             else:
-                if cluster2.point_storage is not None:
+                if cluster2.point_storage is None:
                     return cls._init_merge_copy(cluster2, cluster1.point_storage)
                 else:
                     return cls.init_base(cluster1.point_storage+cluster2.point_storage, cluster1.k, cluster1.compute_distance,
-                                         cluster1.get_threshold, cluster1.get_point_from_docid)
+                                         cluster1.get_threshold, cluster1.get_point_from_docId)
 
         @classmethod
         def _init_merge_copy(cls, cluster, new_points):
@@ -129,9 +137,9 @@ class GRGPF(object):
 
             # Select new point
             all_points_1 = [(cluster1.clustroid, cluster1.clustroid_rowsum)]+\
-                         zip(cluster1.nearest, cluster1.nearest_rowsums) + zip(cluster1.furthest, cluster1.furthest_rowsums)
+                         list(zip(cluster1.nearest, cluster1.nearest_rowsums)) + list(zip(cluster1.furthest, cluster1.furthest_rowsums))
             all_points_2 = [(cluster2.clustroid, cluster2.clustroid_rowsum)] + \
-                           zip(cluster2.nearest, cluster2.nearest_rowsums) + zip(cluster2.furthest, cluster2.furthest_rowsums)
+                           list(zip(cluster2.nearest, cluster2.nearest_rowsums)) + list(zip(cluster2.furthest, cluster2.furthest_rowsums))
 
             # Update rowsums
             distance_c1_c2 = self.compute_distance(cluster1.clustroid, cluster2.clustroid) ** 2
@@ -162,8 +170,8 @@ class GRGPF(object):
             all_points = sorted(all_points, key=lambda x: x[2])
             self.nearest = [x[0] for x in all_points[0:self.k]]
             self.nearest_rowsums = [x[1] for x in all_points[0:self.k]]
-            self.furthest = reversed([x[0] for x in all_points[len(all_points)-self.k:len(all_points)]])
-            self.furthest_rowsums = reversed([x[0] for x in all_points[len(all_points) - self.k:len(all_points)]])
+            self.furthest = list(reversed([x[0] for x in all_points[len(all_points)-self.k:len(all_points)]]))
+            self.furthest_rowsums = list(reversed([x[1] for x in all_points[len(all_points) - self.k:len(all_points)]]))
 
             self._verify_struct()
             return self
@@ -574,9 +582,29 @@ class GRGPF(object):
             return [self.__class__(points_1, self.compute_distance, self.get_max_subnodes, self.sample_size),
                     self.__class__(points_2, self.compute_distance, self.get_max_subnodes, self.sample_size)]
 
+def threshold_cosine(initial, max, max_count):
+    def t():
+        t.count += 1
+        return float(initial) + float((max-initial)*t.count)/float(max_count)
+    t.count = 0
+    return t
+
 if __name__ == "__main__":
-    reader = TFIDF_reader("test.vectors2")
-    grgpf = GRGPF(tfidf_cosine_distance, reader.read_docId, 4, 4, 100, 10, 10, 10, 0.1, 0.1)
+    reader = TFIDF_reader("test.vectors")
+    grgpf = GRGPF(tfidf_cosine_distance, reader.read_docId,
+                  limit_subnodes=10, limit_clusters_per_leaf=10, limit_total_clusters=1000, limit_total_nodes=1000, k=10,
+                  sample_size=30, get_next_threshold=threshold_cosine(0.9, 0.99, 10))
     for i in range(0, reader.doc_nb):
+        print(i)
+        if i != 0 and i % 100 == 0:
+            print("Recomputing samples")
+            grgpf.recompute(True)
+            print("Recomputing done")
+        if i != 0 and i % 5000 == 0:
+            print("Recomputing representations")
+            grgpf.recompute(False)
+            print("Recomputing done")
+        if i > 20000:
+            break
         grgpf.add_point(reader.read_idx(i))
     print("something")
