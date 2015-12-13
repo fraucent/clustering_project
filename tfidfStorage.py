@@ -18,11 +18,11 @@ class TFIDF_reader(object):
 
         print("Computing doc locations")
 
-        #self.doc_location = {}
-        #for i in range(0, self.doc_nb):
-        #    pos = self.struct_header.size + i * self.struct_entry.size
-        #    self.storage.seek(pos)
-        #    self.doc_location[self.struct_entry_header.unpack(self.storage.read(self.struct_entry_header.size))] = pos
+        self.doc_location = {}
+        for i in range(0, self.doc_nb):
+            pos = self.struct_header.size + i * self.struct_entry.size
+            self.storage.seek(pos)
+            self.doc_location[self.struct_entry_header.unpack(self.storage.read(self.struct_entry_header.size))[0]] = pos
 
         print("Done")
 
@@ -111,6 +111,8 @@ class TFIDF_computation(object):
         :return:
         """
         todo = sorted([(self.words_idx[w], w, words[w]) for w in words], key=lambda x:x[0])
+        word_count = sum(words.values())
+
         data = [0.0 for _ in range(0, 2+2*self.max_doc_size)]
         data[0] = docid
         data[1] = 0.0
@@ -121,7 +123,7 @@ class TFIDF_computation(object):
             else:
                 idx, word, count = todo[i]
                 data[2+i] = idx
-                tf = float(count)#/float(self.words_count[word])
+                tf = float(count)/float(word_count)
                 idf = math.log(float(self.doc_nb)/float(self.words_documents[word]))
                 data[2+self.max_doc_size+i] = tf*idf
                 data[1] += tf * idf * tf * idf
@@ -174,69 +176,69 @@ def parse_bagofwords(filename):
 
 
 def parse_tokens(docsfilename, idxfilename) :
-	idx_dct = {}
-	for line in codecs.open(idxfilename, 'r', 'utf-8') :
-		data = line.split()
-		idx_dct[data[0]] = int(data[1])
-	
-	currentwordcount = Counter()
-	tfidfc = TFIDF_computation()
+    idx_dct = {}
+    for line in codecs.open(idxfilename, 'r', 'utf-8') :
+        data = line.split()
+        idx_dct[data[0]] = int(data[1])
+    
+    currentwordcount = Counter()
+    tfidfc = TFIDF_computation()
 
-	for line in codecs.open(docsfilename, 'r', 'utf-8') :
-		data = line.split()
-		if len(data) == 0 :
-			continue
-		elif data[0] == '.I' :
-			if len(currentwordcount) != 0 :
-				docsize = 0
-				for word in currentwordcount :
-					if word in idx_dct :
-						docsize += 1
-						tfidfc.add_word_usage(idx_dct[word],currentwordcount[word])
-				tfidfc.add_doc_size(docsize)
-				currentwordcount = Counter()
-		elif data[0] == '.W' :
-			continue
-		else :
-			currentwordcount.update(data)
-	if len(currentwordcount) != 0 :
-		docsize = 0
-		for word in currentwordcount :
-			if word in idx_dct :
-				docsize += 1
-				tfidfc.add_word_usage(idx_dct[word],currentwordcount[word])
-		tfidfc.add_doc_size(docsize)
-	
-	tfidfc.init_storage("test.vectors", "")
-	oldDoc = -1
-	currentwordcount = Counter()
-	
-	for line in codecs.open(docsfilename, 'r', 'utf-8') :
-		data = line.split()
-		if len(data) == 0 :
-			continue
-		elif data[0] == '.I' :
-			if len(currentwordcount) != 0 :
-				currentwords = dict([(idx_dct[w],currentwordcount[w]) \
-					for w in currentwordcount if w in idx_dct])
-				tfidfc.compute_vector_and_add(oldDoc, currentwords)
-				currentwordcount = Counter()
-			oldDoc = int(data[1])
-		elif data[0] == '.W' :
-			continue
-		else :
-			currentwordcount.update(data)
-	if len(currentwordcount) != 0 :
-		currentwords = dict([(idx_dct[w],currentwordcount[w]) \
-			for w in currentwordcount if w in idx_dct])
-		tfidfc.compute_vector_and_add(oldDoc, currentwords)
+    for line in codecs.open(docsfilename, 'r', 'utf-8') :
+        data = line.split()
+        if len(data) == 0 :
+            continue
+        elif data[0] == '.I' :
+            if len(currentwordcount) != 0 :
+                docsize = 0
+                for word in currentwordcount :
+                    if word in idx_dct :
+                        docsize += 1
+                        tfidfc.add_word_usage(idx_dct[word],currentwordcount[word])
+                tfidfc.add_doc_size(docsize)
+                currentwordcount = Counter()
+        elif data[0] == '.W' :
+            continue
+        else :
+            currentwordcount.update(data)
+    if len(currentwordcount) != 0 :
+        docsize = 0
+        for word in currentwordcount :
+            if word in idx_dct :
+                docsize += 1
+                tfidfc.add_word_usage(idx_dct[word],currentwordcount[word])
+        tfidfc.add_doc_size(docsize)
+    
+    tfidfc.init_storage("test.vectors", "")
+    oldDoc = -1
+    currentwordcount = Counter()
+    
+    for line in codecs.open(docsfilename, 'r', 'utf-8') :
+        data = line.split()
+        if len(data) == 0 :
+            continue
+        elif data[0] == '.I' :
+            if len(currentwordcount) != 0 :
+                currentwords = dict([(idx_dct[w],currentwordcount[w]) \
+                    for w in currentwordcount if w in idx_dct])
+                tfidfc.compute_vector_and_add(oldDoc, currentwords)
+                currentwordcount = Counter()
+            oldDoc = int(data[1])
+        elif data[0] == '.W' :
+            continue
+        else :
+            currentwordcount.update(data)
+    if len(currentwordcount) != 0 :
+        currentwords = dict([(idx_dct[w],currentwordcount[w]) \
+            for w in currentwordcount if w in idx_dct])
+        tfidfc.compute_vector_and_add(oldDoc, currentwords)
 
 
 if __name__ == "__main__":
-    #parse_bagofwords("data/docword.nytimes1.txt")
-    parse_tokens('data/lyrl2004_tokens_test_sample.dat', 'data/stem.termid.idf.map.txt')
+    #parse_bagofwords("data/docword.nytimes.txt")
+    #parse_tokens('data/lyrl2004_tokens_test_sample.dat', 'data/stem.termid.idf.map.txt')
     reader = TFIDF_reader("test.vectors")
     vector1 = reader.read_idx(0)
-    vector2 = reader.read_idx(1)
+    vector2 = reader.read_idx(10)
     dist = tfidf_cosine_distance(vector1, vector2)
     print(dist)

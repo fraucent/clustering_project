@@ -1,0 +1,164 @@
+\documentclass{beamer}
+\usetheme{metropolis}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage[french]{babel}
+\usepackage{iflang}
+%\usepackage[dvipsnames]{xcolor}
+\usepackage{listings}
+\usepackage{lipsum}
+\usepackage{tikz}
+\usepackage{boolexpr}
+\usepackage{kpfonts}
+\usepackage{caption}
+\usepackage{wrapfig}
+\usepackage{tikz}
+\usepackage{chngcntr}
+\usepackage{verbatim}
+\usepackage[labelformat=empty]{caption}
+
+\title{Implémentation et test de GRGPF sur des BoW}
+\date{14 décembre 2015}
+\author{Guillaume Derval, François Raucent}
+\begin{document}
+  \maketitle
+  \metroset{block=fill}
+  \tableofcontents
+  \section{Implémentation de GRGPF}
+  \begin{frame}
+  	\frametitle{Rappel de GRGPF}
+  	\begin{itemize}
+  		\item Hierarchical clustering + point assignement
+  		\item Maintien un arbre contenant tout les clusters actuels dans ses feuilles
+  		\item Les noeuds internes contiennent des échantillons des clustroid contenu dans leur sous-arbre
+  		\item Représentation spécifique d'un cluster
+  		\item Assigne les points dans ces clusters un à un
+  		\item Si cluster trop large $\rightarrow$ split
+  		\item Si plus de mémoire $\rightarrow$ merge
+  	\end{itemize}
+  \end{frame}
+  \begin{frame}
+  	\frametitle{Choix initiaux}
+  	\begin{itemize}
+  		\item Python
+  		\item Indépendant de la représentation des données/de la distance choisie
+  		\item Proche de la description originale de GRGPF/BUBBLE
+  		\item \alert{Non-balancé}
+  		\item \alert{N'optimise pas l'emplacement mémoire}
+  	\end{itemize}
+  \end{frame}
+  
+ 	%\begin{frame}
+ 	%	\frametitle{Choix d'implémentation}
+ 	%	\begin{itemize}
+ 	%		\item Ni le livre ni l'article d'origine ne décrivent complétement GRGPF
+ 	%		\item Certains points sont en partie laissés à l'appréciation de la personne qui implémente l'algorithme:
+	% 			\begin{itemize}
+	% 				\item Comment split en deux un cluster?
+	% 				\item Quand il n'y a plus de mémoire, quels et combien de cluster faut-il fusionner?
+	% 				\item Comment choisir les échantillons à mettre dans les noeuds internes de l'arbre?
+	% 				\item Quand/comment recalculer une représentation de cluster?
+	% 			\end{itemize}
+ 	%	\end{itemize}
+ 	%\end{frame}
+ 	
+ 	\begin{frame}
+ 		\frametitle{Représentation d'un cluster}
+ 		\begin{itemize}
+ 			\item Clustroid
+ 			\item \texttt{ROWSUM} du Clustroid
+ 			\item $k$ points les plus proches du clustroid
+ 			\item Leurs \texttt{ROWSUM}
+ 			\item Idem pour les $k$ points les plus éloignés.
+ 			\item Particularité: les $2k$ points sont \alert{triés} pour avoir $O(\log(k))$ sur la majorité des opérations
+ 		\end{itemize}
+ 		
+ 		Quatre opérations:
+ 		\begin{enumerate}
+ 			\item \texttt{get\_radius()}
+ 			\item \texttt{add\_point(p)}
+ 			\item \texttt{recompute()}
+ 			\item \texttt{split()}
+		\end{enumerate}
+ 	\end{frame}
+ 	
+ 	\begin{frame}
+ 		\frametitle{Noeuds feuilles}
+ 		Contiennent simplement les clusters.
+ 		
+ 		Trois opérations:
+ 		\begin{enumerate}
+ 			\item \texttt{add\_point(p)}: trouve le cluster qui a le clustroid le plus proche du point $p$ et appelle \texttt{add\_point(p)} sur celui-ci
+ 			\item \texttt{add\_cluster(c)}: trouve le cluster le plus proche du clustroid de $c$, et merge ces clusters si besoin. Sinon, ajoute simplement le nouveau cluster.
+ 			\item \texttt{split()}: splitte ce noeud en deux, en répartissant les clustroid
+ 			\item \texttt{recompute()}: recalcule toutes les représentations de clusters contenues dans ce noeud
+ 		\end{enumerate}
+ 	\end{frame}
+ 	
+ 	\begin{frame}
+ 		\frametitle{Noeuds internes}
+ 		Contiennent un échantillon des clustroids du sous-arbre dont il est la racine.
+ 		
+ 		Trois opérations:
+ 		\begin{enumerate}
+ 			\item \texttt{add\_point(p)}: trouve le noeud enfant qui a le clustroid le plus proche (parmi l'échantillon) du point $p$ et appelle \texttt{add\_point(p)} sur celui-ci
+ 			\item \texttt{add\_cluster(c)}: idem, pour un cluster
+ 			\item \texttt{split()}: splitte ce noeud en deux, en répartissant les clustroid
+ 			\item \texttt{recompute()}: recalcule toutes les représentations de clusters contenues dans ce noeud
+ 		\end{enumerate}
+ 	\end{frame}
+ 	
+ 	\begin{frame}
+ 		\frametitle{Echantionnage des clustroids}
+ 		Soit un noeud avec $n$ enfants, chaque enfant $i$ contenant $m_i$ clustroids (échantillonés ou pas), et une constante $S$, la taille de l'échantillon que l'on souhaite.
+ 		
+ 		On prendra $\max(\lfloor\frac{m_i*S}{\sum_{j=0}^n m_j}\rfloor,1)$ clustroid de chaque enfant $i$, au hasard (uniformement).
+ 	\end{frame}
+ 	
+ 	\begin{frame}
+ 		\frametitle{Mise à jour des échantillons}
+ 		\begin{itemize}
+ 			\item Lors du split d'un noeud enfant, mise à jour des échantillon du parent
+ 			\item Recalcul périodique des échantillons de tout les noeuds
+ 		\end{itemize}
+ 	\end{frame}
+ 	
+ 	\begin{frame}
+ 		\frametitle{Implémentation de split - Cluster}
+ 		Peu défini par l'article original. On utilise ici une heuristique proposée dans l'algorithme \texttt{BIRCH}.
+ 		\begin{enumerate}
+ 			\item Remettre tout les points du cluster en mémoire
+ 			\item Prendre la paire de point la plus éloignée
+ 			\item En faire deux clustroid temporaires
+ 			\item Pour chaque point restant, l'assigner au clustroid le plus proche
+ 			\item Recalculer les représentations des clusters résultants
+ 		\end{enumerate}
+ 	\end{frame}
+ 	
+ 	\begin{frame}
+ 		\frametitle{Implémentation de split - Noeud}
+ 		De nouveau, non défini dans l'article original. Idée toujours prise de \texttt{BIRCH}.
+ 		\begin{enumerate}
+ 			\item Prendre le sample de clustroid
+ 			\item Trouver les deux clustroids les plus éloignés
+ 			\item Répartir les clustroid en deux groupes en fonctions de leur distance
+ 			\item Créer deux noeuds à partir de cela
+ 		\end{enumerate}
+ 	\end{frame}
+ 	
+ 	\begin{frame}
+ 		\frametitle{Merge}
+ 		\begin{itemize}
+ 			\item But: réduire la mémoire
+ 			\item Augmentation du threshold de split
+ 			\item Recréation entière de l'arbre, en traitant les clusters comme les points
+ 			\item Calcul des représentation mergée présentée dans le cours
+ 		\end{itemize}
+ 	\end{frame}
+ 	
+ 	\section{Tests et résultats}
+ 	\section{Conclusion}
+\end{document}
