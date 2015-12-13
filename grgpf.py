@@ -27,6 +27,40 @@ class GRGPF(object):
     def recompute(self, only_samples):
         self.root.recompute(only_samples)
 
+    def create_stdtree(self):
+        def dfs(node):
+            if isinstance(node, GRGPF.InteriorNode):
+                r = []
+                for s in node.subnodes:
+                    r.append(dfs(s))
+                return r
+            elif isinstance(node, GRGPF.Leaf):
+                r = []
+                for c in node.clusters:
+                    r.append(dfs(c))
+                return r
+            elif isinstance(node, GRGPF.Cluster): #cluster
+                return node.points
+            else:
+                assert(False)
+        return dfs(self.root)
+
+    def create_cluster_list(self):
+        def mydfs(node):
+            if isinstance(node, GRGPF.InteriorNode):
+                for i in node.subnodes:
+                    mydfs(i)
+            elif isinstance(node, GRGPF.Leaf):
+                for i in node.clusters:
+                    mydfs(i)
+            elif isinstance(node, GRGPF.Cluster):
+                mydfs.result.append(node.points)
+            else:
+                assert(False)
+        mydfs.result = []
+        mydfs(self.root)
+        return mydfs.result
+
     def add_point(self, p):
         if self.root is None:
             cluster = self.Cluster.init_base([p], self.k, self.distance_measure, (lambda: self.threshold), self.get_point_from_docid)
@@ -592,19 +626,21 @@ def threshold_cosine(initial, max, max_count):
 if __name__ == "__main__":
     reader = TFIDF_reader("test.vectors")
     grgpf = GRGPF(tfidf_cosine_distance, reader.read_docId,
-                  limit_subnodes=10, limit_clusters_per_leaf=10, limit_total_clusters=1000, limit_total_nodes=1000, k=10,
-                  sample_size=30, get_next_threshold=threshold_cosine(0.9, 0.99, 10))
+                  limit_subnodes=10, limit_clusters_per_leaf=10, limit_total_clusters=1000, limit_total_nodes=200, k=10,
+                  sample_size=30, get_next_threshold=threshold_cosine(0.8, 0.99, 10))
     for i in range(0, reader.doc_nb):
         print(i)
-        if i != 0 and i % 100 == 0:
+        if i != 0 and i % 100 == 0: #recalcul des samples tout les 100 points
             print("Recomputing samples")
             grgpf.recompute(True)
             print("Recomputing done")
-        if i != 0 and i % 5000 == 0:
+        if i != 0 and i % 5000 == 0: #recalcul complet des representations tout les 5000 points
             print("Recomputing representations")
             grgpf.recompute(False)
             print("Recomputing done")
-        if i > 20000:
+        if i > 1000: #limite sur le nombre de document qu'on ajoute
             break
         grgpf.add_point(reader.read_idx(i))
+    print(grgpf.create_cluster_list())
+    print(grgpf.create_stdtree())
     print("something")
