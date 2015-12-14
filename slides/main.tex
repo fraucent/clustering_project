@@ -1,6 +1,12 @@
 \documentclass{beamer}
+%\usepackage{fontspec}
+
 \usetheme{metropolis}
-\usepackage[utf8]{inputenc}
+%\setsansfont{FiraSans}
+%\setsansfont{Fira Sans}
+\usepackage[sfdefault]{FiraSans}
+%\usepackage{fira}
+%\usepackage[utf8]{inputenc}
 \usepackage{amsmath}
 \usepackage{amsfonts}
 \usepackage{amssymb}
@@ -76,43 +82,57 @@
  			\item Particularité: les $2k$ points sont \alert{triés} pour avoir $O(\log(k))$ sur la majorité des opérations
  		\end{itemize}
  		
- 		Quatre opérations:
- 		\begin{enumerate}
- 			\item \texttt{get\_radius()}
- 			\item \texttt{add\_point(p)}
- 			\item \texttt{recompute()}
- 			\item \texttt{split()}
-		\end{enumerate}
+ 		%Méthodes principales:
+ 		%\begin{enumerate}
+ 		%	\item \texttt{get\_radius()}
+	 	%	\item \texttt{add\_point(p)}
+ 		%	\item \texttt{recompute()}
+ 		%	\item \texttt{split()}
+		%\end{enumerate}
  	\end{frame}
  	
  	\begin{frame}
- 		\frametitle{Noeuds feuilles}
- 		Contiennent simplement les clusters.
+ 		\frametitle{Forme de l'arbre de GRGPF}
+ 		\begin{itemize}
+ 			\item Noeuds internes avec échantillons des clustroids de leur sous-arbre
+ 			\item Noeuds feuilles qui contiennent les représentations des clusters
+ 		\end{itemize}
  		
- 		Trois opérations:
- 		\begin{enumerate}
- 			\item \texttt{add\_point(p)}: trouve le cluster qui a le clustroid le plus proche du point $p$ et appelle \texttt{add\_point(p)} sur celui-ci
- 			\item \texttt{add\_cluster(c)}: trouve le cluster le plus proche du clustroid de $c$, et merge ces clusters si besoin. Sinon, ajoute simplement le nouveau cluster.
- 			\item \texttt{split()}: splitte ce noeud en deux, en répartissant les clustroid
- 			\item \texttt{recompute()}: recalcule toutes les représentations de clusters contenues dans ce noeud
- 		\end{enumerate}
+ 		Problèmes à résoudre:
+ 		\begin{itemize}
+ 			\item Comment échantilloner?
+ 			\item Comment split?
+ 			\item Comment merge?
+ 		\end{itemize}
  	\end{frame}
+ 	%\begin{frame}
+ 	%	\frametitle{Noeuds feuilles}
+ 	%	Contiennent simplement les clusters.
+ 	%	
+ 	%	Méthodes principales:
+ 	%	\begin{enumerate}
+ 	%		\item \texttt{add\_point(p)}: trouve le cluster qui a le clustroid le plus proche du point $p$ et appelle \texttt{add\_point(p)} sur celui-ci
+ 	%		\item \texttt{add\_cluster(c)}: trouve le cluster le plus proche du clustroid de $c$, et merge ces clusters si besoin. Sinon, ajoute simplement le nouveau cluster.
+ 	%		\item \texttt{split()}: splitte ce noeud en deux, en répartissant les clustroid
+ 	%		\item \texttt{recompute()}: recalcule toutes les représentations de clusters contenues dans ce noeud
+ 	%	\end{enumerate}
+ 	%\end{frame}
+ 	
+ 	%\begin{frame}
+ 	%	\frametitle{Noeuds internes}
+ 	%	Contiennent un échantillon des clustroids du sous-arbre dont il est la racine.
+ 	%	
+ 	%	Méthodes principales:
+ 	%	\begin{enumerate}
+ 	%		\item \texttt{add\_point(p)}: trouve le noeud enfant qui a le clustroid le plus proche (parmi l'échantillon) du point $p$ et appelle \texttt{add\_point(p)} sur celui-ci
+ 	%		\item \texttt{add\_cluster(c)}: idem, pour un cluster
+ 	%		\item \texttt{split()}: splitte ce noeud en deux, en répartissant les clustroid
+ 	%		\item \texttt{recompute()}: recalcule toutes les représentations de clusters contenues dans ce noeud
+ 	%	\end{enumerate}
+ 	%\end{frame}
  	
  	\begin{frame}
- 		\frametitle{Noeuds internes}
- 		Contiennent un échantillon des clustroids du sous-arbre dont il est la racine.
- 		
- 		Trois opérations:
- 		\begin{enumerate}
- 			\item \texttt{add\_point(p)}: trouve le noeud enfant qui a le clustroid le plus proche (parmi l'échantillon) du point $p$ et appelle \texttt{add\_point(p)} sur celui-ci
- 			\item \texttt{add\_cluster(c)}: idem, pour un cluster
- 			\item \texttt{split()}: splitte ce noeud en deux, en répartissant les clustroid
- 			\item \texttt{recompute()}: recalcule toutes les représentations de clusters contenues dans ce noeud
- 		\end{enumerate}
- 	\end{frame}
- 	
- 	\begin{frame}
- 		\frametitle{Echantionnage des clustroids}
+ 		\frametitle{Echantillonnage des clustroids}
  		Soit un noeud avec $n$ enfants, chaque enfant $i$ contenant $m_i$ clustroids (échantillonés ou pas), et une constante $S$, la taille de l'échantillon que l'on souhaite.
  		
  		On prendra $\max(\lfloor\frac{m_i*S}{\sum_{j=0}^n m_j}\rfloor,1)$ clustroid de chaque enfant $i$, au hasard (uniformement).
@@ -159,6 +179,26 @@
  		\end{itemize}
  	\end{frame}
  	
+ 	\begin{frame}
+ 		\frametitle{Paramètres finaux}
+ 		\begin{itemize}
+ 			\item \texttt{limit\_subnodes}
+ 			\item \texttt{limit\_clusters\_per\_leaf}
+ 			\item \texttt{limit\_total\_clusters}
+ 			\item \texttt{limit\_total\_nodes}
+ 			\item \texttt{k}
+ 			\item \texttt{get\_next\_threshold}
+ 			\item Quand recalculer les échantillons?
+ 			\item Quand recalculer les représentations?
+ 		\end{itemize}
+ 	\end{frame}
+ 	
+ 	\begin{frame}
+ 		\frametitle{Faiblesse de la description de l'algorithme}
+ 		GRGPF ne définit pas de maximum de point dans chaque cluster; il peut dès lors être impossible de remettre les points en mémoire et de recalculer la représentation...
+ 		
+ 		Aucune des références sur GRGPF n'évoque ce problème.
+ 	\end{frame}
  	\section{Tests et résultats}
  	\section{Conclusion}
 \end{document}
